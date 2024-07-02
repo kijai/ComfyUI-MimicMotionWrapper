@@ -1,31 +1,21 @@
 import os
-from omegaconf import OmegaConf
 import torch
-import torch.nn.functional as F
 import sys
 import numpy as np
+import gc
 
-script_directory = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(script_directory)
-
-from einops import repeat
 import folder_paths
 import comfy.model_management as mm
 import comfy.utils
-
-from contextlib import nullcontext
-try:
-    from accelerate import init_empty_weights
-    is_accelerate_available = True
-except:
-    pass
-
-from mimicmotion.pipelines.pipeline_mimicmotion import MimicMotionPipeline
 
 from diffusers.models import AutoencoderKLTemporalDecoder
 from diffusers.schedulers import EulerDiscreteScheduler
 from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
+script_directory = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(script_directory)
+
+from mimicmotion.pipelines.pipeline_mimicmotion import MimicMotionPipeline
 from mimicmotion.modules.unet import UNetSpatioTemporalConditionModel
 from mimicmotion.modules.pose_net import PoseNet
 
@@ -65,6 +55,7 @@ class DownloadAndLoadMimicMotionModel:
                     ], {
                         "default": 'fp16'
                     }),
+            
             },
         }
 
@@ -77,6 +68,8 @@ class DownloadAndLoadMimicMotionModel:
         device = mm.get_torch_device()
         mm.soft_empty_cache()
         dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[precision]
+
+        pbar = comfy.utils.ProgressBar(3)
         
         download_path = os.path.join(folder_paths.models_dir, "mimicmotion")
         model_path = os.path.join(download_path, model)
@@ -89,13 +82,20 @@ class DownloadAndLoadMimicMotionModel:
                                 local_dir=download_path, 
                                 local_dir_use_symlinks=False)
 
-        ckpt_base_name = os.path.basename(model_path)
         print(f"Loading model from: {model_path}")
+        pbar.update(1)
 
         svd_path = os.path.join(folder_paths.models_dir, "diffusers", "stable-video-diffusion-img2vid-xt-1-1")
-
+        
         if not os.path.exists(svd_path):
-            raise ValueError(f"Please download stable-video-diffusion-img2vid-xt-1-1 to {svd_path}")
+            #raise ValueError(f"Please download stable-video-diffusion-img2vid-xt-1-1 to {svd_path}")
+            print(f"Downloading SVD model to: {model_path}")
+            from huggingface_hub import snapshot_download
+            snapshot_download(repo_id="vdo/stable-video-diffusion-img2vid-xt-1-1", 
+                                allow_patterns=[f"*.json", "*fp16*"],
+                                local_dir=svd_path, 
+                                local_dir_use_symlinks=False)
+        pbar.update(1)
 
         mimicmotion_models = MimicMotionModel(svd_path).to(device=device).eval()
         mimicmotion_models.load_state_dict(comfy.utils.load_torch_file(model_path), strict=False)
@@ -108,16 +108,18 @@ class DownloadAndLoadMimicMotionModel:
             feature_extractor=mimicmotion_models.feature_extractor, 
             pose_net=mimicmotion_models.pose_net,
         )
+        
         pipeline.unet.to(dtype)
         pipeline.pose_net.to(dtype)
         pipeline.vae.to(dtype)
         pipeline.image_encoder.to(dtype)
-        pipeline.pose_net.to(dtype)        
-
+        pipeline.pose_net.to(dtype)
+        
         mimic_model = {
             'pipeline': pipeline,
             'dtype': dtype
         }
+        pbar.update(1)
         return (mimic_model,)
     
 class MimicMotionSampler:
@@ -151,16 +153,26 @@ class MimicMotionSampler:
         pipeline = mimic_pipeline['pipeline']
 
         B, H, W, C = pose_images.shape
-        ref_image = ref_image.permute(0, 3, 1, 2).to(device).to(dtype)
-        pose_images = pose_images.permute(0, 3, 1, 2).to(device).to(dtype)
-        ref_image = ref_image * 2 - 1
+       
+        ref_image = ref_image.permute(0, 3, 1, 2)
+        pose_images = pose_images.permute(0, 3, 1, 2)
+
+        if ref_image.shape[1:3] != (224, 224):
+            ref_img = comfy.utils.common_upscale(ref_image, 224, 224, "lanczos", "disabled")
+        else:
+            ref_img = ref_image
+
+        ref_img = ref_img * 2 - 1
         pose_images = pose_images * 2 - 1
+
+        ref_img = ref_img.to(device).to(dtype)
+        pose_images = pose_images.to(device).to(dtype)
 
         generator = torch.Generator(device=device)
         generator.manual_seed(seed)
-
+        
         frames = pipeline(
-            ref_image, 
+            ref_img, 
             image_pose=pose_images, 
             num_frames=B,
             tile_size = 16, 
@@ -177,8 +189,14 @@ class MimicMotionSampler:
             output_type="pt", 
             device=device
         ).frames
-        frames = frames.squeeze(0).permute(0, 2, 3, 1).cpu().float()
-        print(frames.shape)
+        frames = frames.squeeze(0)[1:].permute(0, 2, 3, 1).cpu().float()
+
+        if not keep_model_loaded:
+            pipeline.unet.to(offload_device)
+            pipeline.vae.to(offload_device)
+
+            mm.soft_empty_cache()
+            gc.collect()
 
         return frames,
 
@@ -194,8 +212,8 @@ class MimicMotionGetPoses:
             },
         }
 
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("images",)
+    RETURN_TYPES = ("IMAGE", "IMAGE",)
+    RETURN_NAMES = ("poses_with_ref", "pose_images")
     FUNCTION = "process"
     CATEGORY = "MimicMotionWrapper"
 
@@ -246,9 +264,11 @@ class MimicMotionGetPoses:
         pose_images_np = pose_images.cpu().numpy() * 255
 
         # read input video
+        pbar = comfy.utils.ProgressBar(len(pose_images_np))
         detected_poses_np_list = []
         for img_np in pose_images_np:
             detected_poses_np_list.append(dwprocessor(img_np))
+            pbar.update(1)
 
         detected_bodies = np.stack(
             [p['bodies']['candidate'] for p in detected_poses_np_list if p['bodies']['candidate'].shape[0] == 18])[:,
@@ -277,10 +297,7 @@ class MimicMotionGetPoses:
         output_tensor = torch.cat((ref_pose_tensor.unsqueeze(0), output_tensor))
         output_tensor = output_tensor.permute(0, 2, 3, 1).cpu().float()      
         
-        return output_tensor,
-
-        
-
+        return output_tensor, output_tensor[1:]
 
 NODE_CLASS_MAPPINGS = {
     "DownloadAndLoadMimicMotionModel": DownloadAndLoadMimicMotionModel,

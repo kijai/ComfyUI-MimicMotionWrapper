@@ -20,6 +20,8 @@ from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 from ..modules.pose_net import PoseNet
 
 from comfy.utils import ProgressBar
+import comfy.model_management as mm
+offload_device = mm.unet_offload_device()
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -145,8 +147,10 @@ class MimicMotionPipeline(DiffusionPipeline):
             ).pixel_values
 
         image = image.to(device=device, dtype=dtype)
+        self.image_encoder.to(device)
         image_embeddings = self.image_encoder(image).image_embeds
         image_embeddings = image_embeddings.unsqueeze(1)
+        self.image_encoder.to(offload_device)
 
         # duplicate image embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = image_embeddings.shape
@@ -189,7 +193,9 @@ class MimicMotionPipeline(DiffusionPipeline):
         do_classifier_free_guidance: bool,
     ):
         image = image.to(device=device)
+        self.vae.to(device)
         image_latents = self.vae.encode(image).latent_dist.mode()
+        self.vae.to(offload_device)
 
         if do_classifier_free_guidance:
             negative_image_latents = torch.zeros_like(image_latents)
@@ -256,7 +262,10 @@ class MimicMotionPipeline(DiffusionPipeline):
                 # we only pass num_frames_in if it's expected
                 decode_kwargs["num_frames"] = num_frames_in
 
+            self.vae.to(latents.device)
             frame = self.vae.decode(latents[i: i + decode_chunk_size], **decode_kwargs).sample
+            self.vae.to(offload_device)
+
             frames.append(frame.cpu())
         frames = torch.cat(frames, dim=0)
 
@@ -568,6 +577,8 @@ class MimicMotionPipeline(DiffusionPipeline):
         self._guidance_scale = guidance_scale
 
         # 8. Denoising loop
+        self.unet.to(device)
+
         self._num_timesteps = len(timesteps)
         pose_latents = einops.rearrange(pose_latents, '(b f) c h w -> b f c h w', f=num_frames)
         indices = [[0, *range(i + 1, min(i + tile_size, num_frames))] for i in
@@ -627,6 +638,8 @@ class MimicMotionPipeline(DiffusionPipeline):
                     callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
 
                     latents = callback_outputs.pop("latents", latents)
+                    
+        self.unet.to(offload_device)
 
         if not output_type == "latent":
             # cast back to fp16 if needed
