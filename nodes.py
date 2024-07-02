@@ -110,7 +110,8 @@ class DownloadAndLoadMimicMotionModel:
         pbar.update(1)
 
         mimicmotion_models = MimicMotionModel(svd_path, lcm=lcm).to(device=device).eval()
-        mimicmotion_models.load_state_dict(comfy.utils.load_torch_file(model_path), strict=False)
+        mimic_motion_sd = comfy.utils.load_torch_file(model_path)
+        mimicmotion_models.load_state_dict(mimic_motion_sd, strict=False)
 
         if lcm:
             lcm_noise_scheduler = AnimateLCMSVDStochasticIterativeScheduler(

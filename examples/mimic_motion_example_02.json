@@ -1,154 +1,43 @@
 {
-  "last_node_id": 51,
-  "last_link_id": 128,
+  "last_node_id": 54,
+  "last_link_id": 139,
   "nodes": [
     {
-      "id": 42,
-      "type": "MimicMotionGetPoses",
+      "id": 51,
+      "type": "Note",
       "pos": [
-        327,
-        702
+        766,
+        105
       ],
       "size": {
-        "0": 330,
-        "1": 126
+        "0": 290.1233825683594,
+        "1": 69.71562957763672
       },
       "flags": {},
-      "order": 9,
+      "order": 0,
       "mode": 0,
-      "inputs": [
-        {
-          "name": "ref_image",
-          "type": "IMAGE",
-          "link": 110
-        },
-        {
-          "name": "pose_images",
-          "type": "IMAGE",
-          "link": 111
-        }
-      ],
-      "outputs": [
-        {
-          "name": "poses_with_ref",
-          "type": "IMAGE",
-          "links": [
-            112,
-            114
-          ],
-          "shape": 3,
-          "slot_index": 0
-        },
-        {
-          "name": "pose_images",
-          "type": "IMAGE",
-          "links": [
-            113
-          ],
-          "shape": 3,
-          "slot_index": 1
-        }
-      ],
       "properties": {
-        "Node name for S&R": "MimicMotionGetPoses"
+        "text": ""
       },
       "widgets_values": [
-        true,
-        true,
-        true
-      ]
-    },
-    {
-      "id": 35,
-      "type": "ImageResizeKJ",
-      "pos": [
-        -75,
-        781
+        "Downloads MimicMotion model and fp16 version of SVD XT 1.1"
       ],
-      "size": {
-        "0": 315,
-        "1": 242
-      },
-      "flags": {},
-      "order": 7,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 86
-        },
-        {
-          "name": "get_image_size",
-          "type": "IMAGE",
-          "link": null
-        },
-        {
-          "name": "width_input",
-          "type": "INT",
-          "link": 88,
-          "widget": {
-            "name": "width_input"
-          }
-        },
-        {
-          "name": "height_input",
-          "type": "INT",
-          "link": 89,
-          "widget": {
-            "name": "height_input"
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            111
-          ],
-          "shape": 3,
-          "slot_index": 0
-        },
-        {
-          "name": "width",
-          "type": "INT",
-          "links": null,
-          "shape": 3
-        },
-        {
-          "name": "height",
-          "type": "INT",
-          "links": null,
-          "shape": 3
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ImageResizeKJ"
-      },
-      "widgets_values": [
-        576,
-        1024,
-        "lanczos",
-        false,
-        64,
-        0,
-        0
-      ]
+      "color": "#432",
+      "bgcolor": "#653"
     },
     {
       "id": 9,
       "type": "GetImageSizeAndCount",
       "pos": [
-        826,
-        505
+        825,
+        518
       ],
       "size": {
         "0": 210,
         "1": 86
       },
       "flags": {},
-      "order": 10,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -168,13 +57,13 @@
           "slot_index": 0
         },
         {
-          "name": "576 width",
+          "name": "1024 width",
           "type": "INT",
           "links": null,
           "shape": 3
         },
         {
-          "name": "1024 height",
+          "name": "576 height",
           "type": "INT",
           "links": null,
           "shape": 3
@@ -191,18 +80,106 @@
       }
     },
     {
+      "id": 2,
+      "type": "DownloadAndLoadMimicMotionModel",
+      "pos": [
+        764,
+        229
+      ],
+      "size": {
+        "0": 315,
+        "1": 106
+      },
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "mimic_pipeline",
+          "type": "MIMICPIPE",
+          "links": [
+            1
+          ],
+          "shape": 3
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "DownloadAndLoadMimicMotionModel"
+      },
+      "widgets_values": [
+        "MimicMotion-fp16.safetensors",
+        "fp16",
+        false
+      ]
+    },
+    {
+      "id": 17,
+      "type": "ImageConcatMulti",
+      "pos": [
+        1212,
+        865
+      ],
+      "size": {
+        "0": 210,
+        "1": 190
+      },
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image_1",
+          "type": "IMAGE",
+          "link": 95
+        },
+        {
+          "name": "image_2",
+          "type": "IMAGE",
+          "link": 137
+        },
+        {
+          "name": "image_3",
+          "type": "IMAGE",
+          "link": 138
+        },
+        {
+          "name": "image_4",
+          "type": "IMAGE",
+          "link": 139
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            93
+          ],
+          "shape": 3,
+          "slot_index": 0
+        }
+      ],
+      "properties": {},
+      "widgets_values": [
+        4,
+        "right",
+        false,
+        null
+      ]
+    },
+    {
       "id": 37,
       "type": "VHS_VideoCombine",
       "pos": [
-        723,
-        819
+        653,
+        958
       ],
-      "size": {
-        "0": 440,
-        "1": 218
-      },
+      "size": [
+        440,
+        468.25
+      ],
       "flags": {},
-      "order": 11,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -252,337 +229,74 @@
       }
     },
     {
-      "id": 28,
-      "type": "ImageResizeKJ",
+      "id": 42,
+      "type": "MimicMotionGetPoses",
       "pos": [
-        -71,
-        481
+        327,
+        702
       ],
       "size": {
-        "0": 315,
-        "1": 242
-      },
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 61
-        },
-        {
-          "name": "get_image_size",
-          "type": "IMAGE",
-          "link": null
-        },
-        {
-          "name": "width_input",
-          "type": "INT",
-          "link": null,
-          "widget": {
-            "name": "width_input"
-          }
-        },
-        {
-          "name": "height_input",
-          "type": "INT",
-          "link": null,
-          "widget": {
-            "name": "height_input"
-          }
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            95,
-            110
-          ],
-          "shape": 3,
-          "slot_index": 0
-        },
-        {
-          "name": "width",
-          "type": "INT",
-          "links": [
-            88
-          ],
-          "shape": 3,
-          "slot_index": 1
-        },
-        {
-          "name": "height",
-          "type": "INT",
-          "links": [
-            89
-          ],
-          "shape": 3,
-          "slot_index": 2
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "ImageResizeKJ"
-      },
-      "widgets_values": [
-        576,
-        1024,
-        "lanczos",
-        false,
-        64,
-        0,
-        0
-      ]
-    },
-    {
-      "id": 49,
-      "type": "PreviewImage",
-      "pos": [
-        290,
-        251
-      ],
-      "size": {
-        "0": 210,
-        "1": 246
-      },
-      "flags": {},
-      "order": 8,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 125
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "PreviewImage"
-      }
-    },
-    {
-      "id": 2,
-      "type": "DownloadAndLoadMimicMotionModel",
-      "pos": [
-        764,
-        229
-      ],
-      "size": {
-        "0": 315,
-        "1": 82
-      },
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "outputs": [
-        {
-          "name": "mimic_pipeline",
-          "type": "MIMICPIPE",
-          "links": [
-            1
-          ],
-          "shape": 3
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "DownloadAndLoadMimicMotionModel"
-      },
-      "widgets_values": [
-        "MimicMotion-fp16.safetensors",
-        "fp16"
-      ]
-    },
-    {
-      "id": 50,
-      "type": "Note",
-      "pos": [
-        281,
-        104
-      ],
-      "size": {
-        "0": 293.7375183105469,
-        "1": 101.26885986328125
-      },
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "properties": {
-        "text": ""
-      },
-      "widgets_values": [
-        "ref_image needs to be 224x224 for clip_vision\ndefault seems to be just resizing, you can try other methods like cropping as well"
-      ],
-      "color": "#432",
-      "bgcolor": "#653"
-    },
-    {
-      "id": 51,
-      "type": "Note",
-      "pos": [
-        779,
-        105
-      ],
-      "size": {
-        "0": 290.1233825683594,
-        "1": 69.71562957763672
-      },
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "properties": {
-        "text": ""
-      },
-      "widgets_values": [
-        "Downloads MimicMotion model and fp16 version of SVD XT 1.1"
-      ],
-      "color": "#432",
-      "bgcolor": "#653"
-    },
-    {
-      "id": 17,
-      "type": "ImageConcatMulti",
-      "pos": [
-        1186,
-        774
-      ],
-      "size": {
-        "0": 210,
-        "1": 170
-      },
-      "flags": {},
-      "order": 13,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image_1",
-          "type": "IMAGE",
-          "link": 95
-        },
-        {
-          "name": "image_2",
-          "type": "IMAGE",
-          "link": 113
-        },
-        {
-          "name": "image_3",
-          "type": "IMAGE",
-          "link": 99
-        }
-      ],
-      "outputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "links": [
-            93
-          ],
-          "shape": 3,
-          "slot_index": 0
-        }
-      ],
-      "properties": {},
-      "widgets_values": [
-        3,
-        "right",
-        false,
-        null
-      ]
-    },
-    {
-      "id": 48,
-      "type": "ImageResizeKJ",
-      "pos": [
-        -57,
-        170
-      ],
-      "size": {
-        "0": 315,
-        "1": 242
+        "0": 330,
+        "1": 126
       },
       "flags": {},
       "order": 6,
       "mode": 0,
       "inputs": [
         {
-          "name": "image",
+          "name": "ref_image",
           "type": "IMAGE",
-          "link": 124
+          "link": 110
         },
         {
-          "name": "get_image_size",
+          "name": "pose_images",
           "type": "IMAGE",
-          "link": null
-        },
-        {
-          "name": "width_input",
-          "type": "INT",
-          "link": null,
-          "widget": {
-            "name": "width_input"
-          }
-        },
-        {
-          "name": "height_input",
-          "type": "INT",
-          "link": null,
-          "widget": {
-            "name": "height_input"
-          }
+          "link": 111
         }
       ],
       "outputs": [
         {
-          "name": "IMAGE",
+          "name": "poses_with_ref",
           "type": "IMAGE",
           "links": [
-            125,
-            128
+            112,
+            114
           ],
           "shape": 3,
           "slot_index": 0
         },
         {
-          "name": "width",
-          "type": "INT",
-          "links": [],
+          "name": "pose_images",
+          "type": "IMAGE",
+          "links": [
+            138
+          ],
           "shape": 3,
           "slot_index": 1
-        },
-        {
-          "name": "height",
-          "type": "INT",
-          "links": [],
-          "shape": 3,
-          "slot_index": 2
         }
       ],
       "properties": {
-        "Node name for S&R": "ImageResizeKJ"
+        "Node name for S&R": "MimicMotionGetPoses"
       },
       "widgets_values": [
-        224,
-        224,
-        "lanczos",
-        false,
-        64,
-        0,
-        0
+        true,
+        true,
+        true
       ]
     },
     {
       "id": 16,
       "type": "VHS_VideoCombine",
       "pos": [
-        1482,
-        192
+        1483,
+        95
       ],
       "size": [
-        1530.4949951171875,
-        1199.1081452546296
+        2861.6603258383248,
+        703.6084833210144
       ],
       "flags": {},
-      "order": 14,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -613,7 +327,7 @@
         "Node name for S&R": "VHS_VideoCombine"
       },
       "widgets_values": {
-        "frame_rate": 8,
+        "frame_rate": 12,
         "loop_count": 0,
         "filename_prefix": "MimicMotion",
         "format": "video/h264-mp4",
@@ -626,7 +340,7 @@
           "hidden": false,
           "paused": false,
           "params": {
-            "filename": "MimicMotion_00005.mp4",
+            "filename": "MimicMotion_00010.mp4",
             "subfolder": "",
             "type": "temp",
             "format": "video/h264-mp4"
@@ -646,15 +360,14 @@
         "1": 410.70074462890625
       },
       "flags": {},
-      "order": 3,
+      "order": 2,
       "mode": 0,
       "outputs": [
         {
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            61,
-            124
+            61
           ],
           "shape": 3,
           "slot_index": 0
@@ -670,7 +383,7 @@
         "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "2bc567e9f448176b4e2416ceebf9beab.png",
+        "demo1.jpg",
         "image"
       ]
     },
@@ -686,7 +399,7 @@
         658.5777723524305
       ],
       "flags": {},
-      "order": 4,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -733,24 +446,189 @@
         "force_size": "Disabled",
         "custom_width": 512,
         "custom_height": 512,
-        "frame_load_cap": 16,
+        "frame_load_cap": 15,
         "skip_first_frames": 0,
-        "select_every_nth": 3,
+        "select_every_nth": 2,
         "choose video to upload": "image",
         "videopreview": {
           "hidden": false,
           "paused": false,
           "params": {
-            "frame_load_cap": 16,
+            "frame_load_cap": 15,
             "skip_first_frames": 0,
             "force_rate": 0,
             "filename": "pose1.mp4",
             "type": "input",
             "format": "video/mp4",
-            "select_every_nth": 3
+            "select_every_nth": 2
           }
         }
       }
+    },
+    {
+      "id": 35,
+      "type": "ImageResizeKJ",
+      "pos": [
+        -75,
+        781
+      ],
+      "size": {
+        "0": 315,
+        "1": 242
+      },
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 86
+        },
+        {
+          "name": "get_image_size",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "width_input",
+          "type": "INT",
+          "link": 88,
+          "widget": {
+            "name": "width_input"
+          }
+        },
+        {
+          "name": "height_input",
+          "type": "INT",
+          "link": 89,
+          "widget": {
+            "name": "height_input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            111,
+            137
+          ],
+          "shape": 3,
+          "slot_index": 0
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": null,
+          "shape": 3
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": null,
+          "shape": 3
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageResizeKJ"
+      },
+      "widgets_values": [
+        576,
+        1024,
+        "lanczos",
+        false,
+        64,
+        0,
+        0
+      ]
+    },
+    {
+      "id": 28,
+      "type": "ImageResizeKJ",
+      "pos": [
+        -71,
+        481
+      ],
+      "size": {
+        "0": 315,
+        "1": 242
+      },
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 61
+        },
+        {
+          "name": "get_image_size",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "width_input",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "width_input"
+          }
+        },
+        {
+          "name": "height_input",
+          "type": "INT",
+          "link": null,
+          "widget": {
+            "name": "height_input"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            95,
+            110,
+            136
+          ],
+          "shape": 3,
+          "slot_index": 0
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "links": [
+            88
+          ],
+          "shape": 3,
+          "slot_index": 1
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": [
+            89
+          ],
+          "shape": 3,
+          "slot_index": 2
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageResizeKJ"
+      },
+      "widgets_values": [
+        576,
+        1024,
+        "lanczos",
+        true,
+        64,
+        0,
+        0
+      ]
     },
     {
       "id": 1,
@@ -764,7 +642,7 @@
         "1": 314
       },
       "flags": {},
-      "order": 12,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -776,7 +654,7 @@
         {
           "name": "ref_image",
           "type": "IMAGE",
-          "link": 128,
+          "link": 136,
           "slot_index": 1
         },
         {
@@ -790,7 +668,7 @@
           "name": "images",
           "type": "IMAGE",
           "links": [
-            99
+            139
           ],
           "shape": 3,
           "slot_index": 0
@@ -803,10 +681,10 @@
         25,
         2,
         2,
-        123,
+        42,
         "fixed",
         15,
-        0.02,
+        0,
         16,
         6,
         true
@@ -879,14 +757,6 @@
       "IMAGE"
     ],
     [
-      99,
-      1,
-      0,
-      17,
-      2,
-      "IMAGE"
-    ],
-    [
       110,
       28,
       0,
@@ -911,14 +781,6 @@
       "IMAGE"
     ],
     [
-      113,
-      42,
-      1,
-      17,
-      1,
-      "IMAGE"
-    ],
-    [
       114,
       42,
       0,
@@ -927,27 +789,35 @@
       "IMAGE"
     ],
     [
-      124,
+      136,
+      28,
+      0,
+      1,
+      1,
+      "IMAGE"
+    ],
+    [
+      137,
+      35,
+      0,
+      17,
+      1,
+      "IMAGE"
+    ],
+    [
+      138,
+      42,
+      1,
+      17,
+      2,
+      "IMAGE"
+    ],
+    [
+      139,
+      1,
+      0,
+      17,
       3,
-      0,
-      48,
-      0,
-      "IMAGE"
-    ],
-    [
-      125,
-      48,
-      0,
-      49,
-      0,
-      "IMAGE"
-    ],
-    [
-      128,
-      48,
-      0,
-      1,
-      1,
       "IMAGE"
     ]
   ],
@@ -955,10 +825,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.6830134553650705,
+      "scale": 0.6934334949441352,
       "offset": {
-        "0": 839.62744140625,
-        "1": 131.28245544433594
+        "0": 466.36474609375,
+        "1": 44.73270034790039
       }
     }
   },
