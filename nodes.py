@@ -1,6 +1,5 @@
 import os
 import torch
-import sys
 import numpy as np
 import gc
 
@@ -13,13 +12,12 @@ from diffusers.schedulers import EulerDiscreteScheduler
 from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(script_directory)
 
-from mimicmotion.pipelines.pipeline_mimicmotion import MimicMotionPipeline
-from mimicmotion.modules.unet import UNetSpatioTemporalConditionModel
-from mimicmotion.modules.pose_net import PoseNet
+from .mimicmotion.pipelines.pipeline_mimicmotion import MimicMotionPipeline
+from .mimicmotion.modules.unet import UNetSpatioTemporalConditionModel
+from .mimicmotion.modules.pose_net import PoseNet
 
-from lcm_scheduler import AnimateLCMSVDStochasticIterativeScheduler
+from .lcm_scheduler import AnimateLCMSVDStochasticIterativeScheduler
 
 class MimicMotionModel(torch.nn.Module):
     def __init__(self, base_model_path, lcm=False):
@@ -247,8 +245,8 @@ class MimicMotionGetPoses:
 
     def process(self, ref_image, pose_images, include_body, include_hand, include_face):
         device = mm.get_torch_device()
-        from mimicmotion.dwpose.util import draw_pose
-        from mimicmotion.dwpose.dwpose_detector import DWposeDetector
+        from .mimicmotion.dwpose.util import draw_pose
+        from .mimicmotion.dwpose.dwpose_detector import DWposeDetector
 
         yolo_model = "yolox_l.onnx"
         dw_pose_model = "dw-ll_ucoco_384.onnx"
