@@ -135,6 +135,8 @@ class MimicMotionSampler:
             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
             "fps": ("INT", {"default": 15, "min": 2, "max": 100, "step": 1}),
             "noise_aug_strength": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+            "context_size": ("INT", {"default": 16, "min": 1, "max": 128, "step": 1}),
+            "context_overlap": ("INT", {"default": 6, "min": 1, "max": 128, "step": 1}),
             "keep_model_loaded": ("BOOLEAN", {"default": True}),            
             },
         }
@@ -144,7 +146,7 @@ class MimicMotionSampler:
     FUNCTION = "process"
     CATEGORY = "MimicMotionWrapper"
 
-    def process(self, mimic_pipeline, ref_image, pose_images, cfg_min, cfg_max, steps, seed, noise_aug_strength, fps, keep_model_loaded):
+    def process(self, mimic_pipeline, ref_image, pose_images, cfg_min, cfg_max, steps, seed, noise_aug_strength, fps, keep_model_loaded, context_size, context_overlap):
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
         mm.unload_all_models()
@@ -175,8 +177,8 @@ class MimicMotionSampler:
             ref_img, 
             image_pose=pose_images, 
             num_frames=B,
-            tile_size = 16, 
-            tile_overlap= 6,
+            tile_size = context_size, 
+            tile_overlap= context_overlap,
             height=H,
             width=W, 
             fps=fps,
