@@ -7,15 +7,13 @@ import folder_paths
 import comfy.model_management as mm
 import comfy.utils
 
-from comfy.clip_vision import clip_preprocess
-
 from diffusers.models import AutoencoderKLTemporalDecoder
 from diffusers.schedulers import EulerDiscreteScheduler
 from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
-from .mimicmotion.pipelines.pipeline_mimicmotion import MimicMotionPipeline
+from .mimicmotion.pipelines.pipeline_mimicmotion import MimicMotionPipeline, tensor2vid
 from .mimicmotion.modules.unet import UNetSpatioTemporalConditionModel
 from .mimicmotion.modules.pose_net import PoseNet
 
@@ -140,7 +138,6 @@ class DownloadAndLoadMimicMotionModel:
         pipeline.pose_net.to(dtype)
         pipeline.vae.to(dtype)
         pipeline.image_encoder.to(dtype)
-        pipeline.pose_net.to(dtype)
         
         mimic_model = {
             'pipeline': pipeline,
@@ -168,8 +165,8 @@ class MimicMotionSampler:
             },
         }
 
-    RETURN_TYPES = ("IMAGE",)
-    RETURN_NAMES = ("images",)
+    RETURN_TYPES = ("LATENT",)
+    RETURN_NAMES = ("samples",)
     FUNCTION = "process"
     CATEGORY = "MimicMotionWrapper"
 
@@ -215,17 +212,46 @@ class MimicMotionSampler:
             min_guidance_scale=cfg_min, 
             max_guidance_scale=cfg_max, 
             decode_chunk_size=4, 
-            output_type="pt", 
+            output_type="latent", 
             device=device
         ).frames
-        frames = frames.squeeze(0)[1:].permute(0, 2, 3, 1).cpu().float()
+        #frames = frames.squeeze(0)[1:].permute(0, 2, 3, 1).cpu().float()
 
         if not keep_model_loaded:
             pipeline.unet.to(offload_device)
             pipeline.vae.to(offload_device)
-
             mm.soft_empty_cache()
             gc.collect()
+
+        return {"samples": frames},
+
+class MimicMotionDecode:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "mimic_pipeline": ("MIMICPIPE",),
+            "samples": ("LATENT",),
+            "decode_chunk_size": ("INT", {"default": 4, "min": 1, "max": 200, "step": 1})
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("images",)
+    FUNCTION = "process"
+    CATEGORY = "MimicMotionWrapper"
+
+    def process(self, mimic_pipeline, samples, decode_chunk_size):
+        mm.soft_empty_cache()
+    
+        pipeline = mimic_pipeline['pipeline']
+        num_frames = samples['samples'].shape[0]
+        try:
+            frames = pipeline.decode_latents(samples['samples'], num_frames, decode_chunk_size)
+        except:
+            frames = pipeline.decode_latents(samples['samples'], num_frames, 1)
+        frames = tensor2vid(frames, pipeline.image_processor, output_type="pt")
+        
+        frames = frames.squeeze(1)[1:].permute(0, 2, 3, 1).cpu().float()
 
         return frames,
 
@@ -250,6 +276,8 @@ class MimicMotionGetPoses:
         device = mm.get_torch_device()
         from .mimicmotion.dwpose.util import draw_pose
         from .mimicmotion.dwpose.dwpose_detector import DWposeDetector
+
+        assert ref_image.shape[1:3] == pose_images.shape[1:3], "ref_image and pose_images must have the same resolution"
 
         yolo_model = "yolox_l.onnx"
         dw_pose_model = "dw-ll_ucoco_384.onnx"
@@ -331,11 +359,13 @@ class MimicMotionGetPoses:
 NODE_CLASS_MAPPINGS = {
     "DownloadAndLoadMimicMotionModel": DownloadAndLoadMimicMotionModel,
     "MimicMotionSampler": MimicMotionSampler,
-    "MimicMotionGetPoses": MimicMotionGetPoses
+    "MimicMotionGetPoses": MimicMotionGetPoses,
+    "MimicMotionDecode": MimicMotionDecode
 
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "DownloadAndLoadMimicMotionModel": "DownloadAndLoadMimicMotionModel",
     "MimicMotionSampler": "MimicMotionSampler",
-    "MimicMotionGetPoses": "MimicMotionGetPoses"
+    "MimicMotionGetPoses": "MimicMotionGetPoses",
+    "MimicMotionDecode": "MimicMotionDecode"
 }

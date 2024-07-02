@@ -259,6 +259,7 @@ class MimicMotionPipeline(DiffusionPipeline):
         accepts_num_frames = "num_frames" in set(inspect.signature(forward_vae_fn).parameters.keys())
 
         # decode decode_chunk_size frames at a time to avoid OOM
+        pbar = ProgressBar(latents.shape[0])
         frames = []
         for i in range(0, latents.shape[0], decode_chunk_size):
             num_frames_in = latents[i: i + decode_chunk_size].shape[0]
@@ -272,6 +273,7 @@ class MimicMotionPipeline(DiffusionPipeline):
             self.vae.to(offload_device)
 
             frames.append(frame.cpu())
+            pbar.update(decode_chunk_size)
         frames = torch.cat(frames, dim=0)
 
         # [batch*frames, channels, height, width] -> [batch, channels, frames, height, width]
@@ -485,6 +487,7 @@ class MimicMotionPipeline(DiffusionPipeline):
         width = width or self.unet.config.sample_size * self.vae_scale_factor
 
         num_frames = num_frames if num_frames is not None else self.unet.config.num_frames
+        print("num_frames: ", num_frames)
         decode_chunk_size = decode_chunk_size if decode_chunk_size is not None else num_frames
 
         # 1. Check inputs. Raise error if not correct
