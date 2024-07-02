@@ -188,7 +188,6 @@ class MimicMotionSampler:
         else:
             ref_img = ref_image
 
-        ref_img = ref_img * 2 - 1
         pose_images = pose_images * 2 - 1
 
         ref_img = ref_img.to(device).to(dtype)
