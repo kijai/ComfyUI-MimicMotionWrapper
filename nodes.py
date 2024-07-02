@@ -214,7 +214,7 @@ class MimicMotionSampler:
             generator=generator,
             min_guidance_scale=cfg_min, 
             max_guidance_scale=cfg_max, 
-            decode_chunk_size=8, 
+            decode_chunk_size=4, 
             output_type="pt", 
             device=device
         ).frames
