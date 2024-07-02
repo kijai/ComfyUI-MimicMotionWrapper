@@ -3,6 +3,7 @@ from omegaconf import OmegaConf
 import torch
 import torch.nn.functional as F
 import sys
+import numpy as np
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(script_directory)
@@ -27,7 +28,6 @@ from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
 from mimicmotion.modules.unet import UNetSpatioTemporalConditionModel
 from mimicmotion.modules.pose_net import PoseNet
-from mimicmotion.pipelines.pipeline_mimicmotion import MimicMotionPipeline
 
 class MimicMotionModel(torch.nn.Module):
     def __init__(self, base_model_path):
@@ -181,14 +181,115 @@ class MimicMotionSampler:
         print(frames.shape)
 
         return frames,
-    
+
+class MimicMotionGetPoses:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "ref_image": ("IMAGE",),
+            "pose_images": ("IMAGE",),
+            "include_body": ("BOOLEAN", {"default": True}),
+            "include_hand": ("BOOLEAN", {"default": True}),
+            "include_face": ("BOOLEAN", {"default": True}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("images",)
+    FUNCTION = "process"
+    CATEGORY = "MimicMotionWrapper"
+
+    def process(self, ref_image, pose_images, include_body, include_hand, include_face):
+        device = mm.get_torch_device()
+        from mimicmotion.dwpose.util import draw_pose
+        from mimicmotion.dwpose.dwpose_detector import DWposeDetector
+
+        yolo_model = "yolox_l.onnx"
+        dw_pose_model = "dw-ll_ucoco_384.onnx"
+        model_base_path = os.path.join(script_directory, "models", "DWPose")
+
+        model_det=os.path.join(model_base_path, yolo_model)
+        model_pose=os.path.join(model_base_path, dw_pose_model)
+
+        if not os.path.exists(model_det):
+            print(f"Downloading yolo model to: {model_base_path}")
+            from huggingface_hub import snapshot_download
+            snapshot_download(repo_id="yzd-v/DWPose", 
+                                allow_patterns=[f"*{yolo_model}*"],
+                                local_dir=model_base_path, 
+                                local_dir_use_symlinks=False)
+            
+        if not os.path.exists(model_pose):
+            print(f"Downloading dwpose model to: {model_base_path}")
+            from huggingface_hub import snapshot_download
+            snapshot_download(repo_id="yzd-v/DWPose", 
+                                allow_patterns=[f"*{dw_pose_model}*"],
+                                local_dir=model_base_path, 
+                                local_dir_use_symlinks=False)
+
+        dwprocessor = DWposeDetector(
+            model_det=os.path.join(model_base_path, "yolox_l.onnx"),
+            model_pose=os.path.join(model_base_path, "dw-ll_ucoco_384.onnx"),
+            device=device)
+        
+        ref_image = ref_image.squeeze(0).cpu().numpy() * 255
+
+        # select ref-keypoint from reference pose for pose rescale
+        ref_pose = dwprocessor(ref_image)
+        ref_keypoint_id = [0, 1, 2, 5, 8, 11, 14, 15, 16, 17]
+        ref_keypoint_id = [i for i in ref_keypoint_id \
+            if ref_pose['bodies']['score'].shape[0] > 0 and ref_pose['bodies']['score'][0][i] > 0.3]
+        ref_body = ref_pose['bodies']['candidate'][ref_keypoint_id]
+ 
+
+        height, width, _ = ref_image.shape
+        pose_images_np = pose_images.cpu().numpy() * 255
+
+        # read input video
+        detected_poses_np_list = []
+        for img_np in pose_images_np:
+            detected_poses_np_list.append(dwprocessor(img_np))
+
+        detected_bodies = np.stack(
+            [p['bodies']['candidate'] for p in detected_poses_np_list if p['bodies']['candidate'].shape[0] == 18])[:,
+                        ref_keypoint_id]
+        # compute linear-rescale params
+        ay, by = np.polyfit(detected_bodies[:, :, 1].flatten(), np.tile(ref_body[:, 1], len(detected_bodies)), 1)
+        fh, fw, _ = pose_images_np[0].shape
+        ax = ay / (fh / fw / height * width)
+        bx = np.mean(np.tile(ref_body[:, 0], len(detected_bodies)) - detected_bodies[:, :, 0].flatten() * ax)
+        a = np.array([ax, ay])
+        b = np.array([bx, by])
+        output_pose = []
+        # pose rescale 
+        for detected_pose in detected_poses_np_list:
+            detected_pose['bodies']['candidate'] = detected_pose['bodies']['candidate'] * a + b
+            detected_pose['faces'] = detected_pose['faces'] * a + b
+            detected_pose['hands'] = detected_pose['hands'] * a + b
+            im = draw_pose(detected_pose, height, width, include_body=include_body, include_hand=include_hand, include_face=include_face)
+            output_pose.append(np.array(im))
+
+        output_pose_tensors = [torch.tensor(np.array(im)) for im in output_pose]
+        output_tensor = torch.stack(output_pose_tensors) / 255
+
+        ref_pose_img = draw_pose(ref_pose, height, width, include_body=include_body, include_hand=include_hand, include_face=include_face)
+        ref_pose_tensor = torch.tensor(np.array(ref_pose_img)) / 255
+        output_tensor = torch.cat((ref_pose_tensor.unsqueeze(0), output_tensor))
+        output_tensor = output_tensor.permute(0, 2, 3, 1).cpu().float()      
+        
+        return output_tensor,
+
+        
+
 
 NODE_CLASS_MAPPINGS = {
     "DownloadAndLoadMimicMotionModel": DownloadAndLoadMimicMotionModel,
     "MimicMotionSampler": MimicMotionSampler,
+    "MimicMotionGetPoses": MimicMotionGetPoses
 
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "DownloadAndLoadMimicMotionModel": "DownloadAndLoadMimicMotionModel",
     "MimicMotionSampler": "MimicMotionSampler",
+    "MimicMotionGetPoses": "MimicMotionGetPoses"
 }
