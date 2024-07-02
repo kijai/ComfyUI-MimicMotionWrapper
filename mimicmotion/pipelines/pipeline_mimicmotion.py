@@ -21,6 +21,7 @@ from ..modules.pose_net import PoseNet
 
 from comfy.utils import ProgressBar
 import comfy.model_management as mm
+from comfy.clip_vision import clip_preprocess
 offload_device = mm.unet_offload_device()
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -126,25 +127,28 @@ class MimicMotionPipeline(DiffusionPipeline):
         do_classifier_free_guidance: bool):
         dtype = next(self.image_encoder.parameters()).dtype
 
-        if not isinstance(image, torch.Tensor):
-            image = self.image_processor.pil_to_numpy(image)
-            image = self.image_processor.numpy_to_pt(image)
+        # if not isinstance(image, torch.Tensor):
+        #     image = self.image_processor.pil_to_numpy(image)
+        #     image = self.image_processor.numpy_to_pt(image)
 
-            # We normalize the image before resizing to match with the original implementation.
-            # Then we unnormalize it after resizing.
-            image = image * 2.0 - 1.0
-            image = _resize_with_antialiasing(image, (224, 224))
-            image = (image + 1.0) / 2.0
+        #     # We normalize the image before resizing to match with the original implementation.
+        #     # Then we unnormalize it after resizing.
+        #     image = image * 2.0 - 1.0
+        #     image = _resize_with_antialiasing(image, (224, 224))
+        #     image = (image + 1.0) / 2.0
 
-            # Normalize the image with for CLIP input
-            image = self.feature_extractor(
-                images=image,
-                do_normalize=True,
-                do_center_crop=False,
-                do_resize=False,
-                do_rescale=False,
-                return_tensors="pt",
-            ).pixel_values
+        #     # Normalize the image with for CLIP input
+        #     image = self.feature_extractor(
+        #         images=image,
+        #         do_normalize=True,
+        #         do_center_crop=False,
+        #         do_resize=False,
+        #         do_rescale=False,
+        #         return_tensors="pt",
+        #     ).pixel_values
+
+        image = image.permute(0, 2, 3, 1)
+        image = clip_preprocess(image.clone(), 224)
 
         image = image.to(device=device, dtype=dtype)
         self.image_encoder.to(device)
@@ -159,6 +163,7 @@ class MimicMotionPipeline(DiffusionPipeline):
 
         if do_classifier_free_guidance:
             negative_image_embeddings = torch.zeros_like(image_embeddings)
+            #negative_image_embeddings = torch.randn_like(image_embeddings)
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
@@ -638,7 +643,7 @@ class MimicMotionPipeline(DiffusionPipeline):
                     callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
 
                     latents = callback_outputs.pop("latents", latents)
-                    
+
         self.unet.to(offload_device)
 
         if not output_type == "latent":

@@ -7,6 +7,8 @@ import folder_paths
 import comfy.model_management as mm
 import comfy.utils
 
+from comfy.clip_vision import clip_preprocess
+
 from diffusers.models import AutoencoderKLTemporalDecoder
 from diffusers.schedulers import EulerDiscreteScheduler
 from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
@@ -183,21 +185,22 @@ class MimicMotionSampler:
         ref_image = ref_image.permute(0, 3, 1, 2)
         pose_images = pose_images.permute(0, 3, 1, 2)
 
-        if ref_image.shape[1:3] != (224, 224):
-            ref_img = comfy.utils.common_upscale(ref_image, 224, 224, "lanczos", "disabled")
-        else:
-            ref_img = ref_image
+        # if ref_image.shape[1:3] != (224, 224):
+        #     #ref_img = comfy.utils.common_upscale(ref_image, 224, 224, "lanczos", "disabled")
+        #     ref_img = clip_preprocess(ref_image, 224)
+        # else:
+        #     ref_img = ref_image
 
         pose_images = pose_images * 2 - 1
 
-        ref_img = ref_img.to(device).to(dtype)
+        ref_image = ref_image.to(device).to(dtype)
         pose_images = pose_images.to(device).to(dtype)
 
         generator = torch.Generator(device=device)
         generator.manual_seed(seed)
         
         frames = pipeline(
-            ref_img, 
+            ref_image, 
             image_pose=pose_images, 
             num_frames=B,
             tile_size = context_size, 
