@@ -574,7 +574,7 @@ class MimicMotionPipeline(DiffusionPipeline):
                    range(0, num_frames - tile_size + 1, tile_size - tile_overlap)]
         if indices[-1][-1] < num_frames - 1:
             indices.append([0, *range(num_frames - tile_size + 1, num_frames)])
-        comfy_pbar = ProgressBar(len(timesteps))
+        comfy_pbar = ProgressBar(len(timesteps) * len(indices))
         with self.progress_bar(total=len(timesteps) * len(indices)) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
