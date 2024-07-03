@@ -242,6 +242,10 @@ class MimicMotionSampler:
             },
             "optional": {
                 "optional_scheduler": ("DIFFUSERS_SCHEDULER",),
+                "pose_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
+                "pose_start_percent": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "pose_end_percent": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "image_embed_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.01}),
             }
         }
 
@@ -251,7 +255,7 @@ class MimicMotionSampler:
     CATEGORY = "MimicMotionWrapper"
 
     def process(self, mimic_pipeline, ref_image, pose_images, cfg_min, cfg_max, steps, seed, noise_aug_strength, fps, keep_model_loaded, 
-                context_size, context_overlap, optional_scheduler=None):
+                context_size, context_overlap, optional_scheduler=None, pose_strength=1.0, image_embed_strength=1.0, pose_start_percent=0.0, pose_end_percent=1.0):
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
         mm.unload_all_models()
@@ -307,7 +311,11 @@ class MimicMotionSampler:
             decode_chunk_size=4, 
             output_type="latent", 
             device=device,
-            sigmas=sigmas
+            sigmas=sigmas,
+            pose_strength=pose_strength,
+            pose_start_percent=pose_start_percent,
+            pose_end_percent=pose_end_percent,
+            image_embed_strength=image_embed_strength
         ).frames
 
         if not keep_model_loaded:

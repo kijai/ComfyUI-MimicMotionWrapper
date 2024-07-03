@@ -368,6 +368,7 @@ class UNetSpatioTemporalConditionModel(ModelMixin, ConfigMixin, UNet2DConditionL
             encoder_hidden_states: torch.Tensor,
             added_time_ids: torch.Tensor,
             pose_latents: torch.Tensor = None,
+            pose_strength: float = 1.0,
             image_only_indicator: bool = False,
             return_dict: bool = True,
     ) -> Union[UNetSpatioTemporalConditionOutput, Tuple]:
@@ -437,11 +438,12 @@ class UNetSpatioTemporalConditionModel(ModelMixin, ConfigMixin, UNet2DConditionL
         emb = emb.repeat_interleave(num_frames, dim=0)
         # encoder_hidden_states: [batch, 1, channels] -> [batch * frames, 1, channels]
         encoder_hidden_states = encoder_hidden_states.repeat_interleave(num_frames, dim=0)
+        encoder_hidden_states = encoder_hidden_states
 
         # 2. pre-process
         sample = self.conv_in(sample)
         if pose_latents is not None:
-            sample = sample + pose_latents
+            sample = sample + pose_latents * pose_strength
 
         image_only_indicator = torch.ones(batch_size, num_frames, dtype=sample.dtype, device=sample.device) \
             if image_only_indicator else torch.zeros(batch_size, num_frames, dtype=sample.dtype, device=sample.device)

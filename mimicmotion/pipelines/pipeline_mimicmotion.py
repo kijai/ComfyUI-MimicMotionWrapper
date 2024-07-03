@@ -124,7 +124,8 @@ class MimicMotionPipeline(DiffusionPipeline):
         image: PipelineImageInput, 
         device: Union[str, torch.device], 
         num_videos_per_prompt: int, 
-        do_classifier_free_guidance: bool):
+        do_classifier_free_guidance: bool,
+        image_embed_strength: float = 1.0):
         dtype = next(self.image_encoder.parameters()).dtype
 
         # if not isinstance(image, torch.Tensor):
@@ -160,6 +161,7 @@ class MimicMotionPipeline(DiffusionPipeline):
         bs_embed, seq_len, _ = image_embeddings.shape
         image_embeddings = image_embeddings.repeat(1, num_videos_per_prompt, 1)
         image_embeddings = image_embeddings.view(bs_embed * num_videos_per_prompt, seq_len, -1)
+        image_embeddings = image_embeddings * image_embed_strength
 
         if do_classifier_free_guidance:
             negative_image_embeddings = torch.zeros_like(image_embeddings)
@@ -169,6 +171,8 @@ class MimicMotionPipeline(DiffusionPipeline):
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
             image_embeddings = torch.cat([negative_image_embeddings, image_embeddings])
+        
+        
 
         return image_embeddings
 
@@ -179,8 +183,10 @@ class MimicMotionPipeline(DiffusionPipeline):
     ):
         # Get latents_pose
         pose_latents = self.pose_net(pose_image)
+        print(pose_latents.shape)
 
         if do_classifier_free_guidance:
+            print("doing classifier free guidance")
             negative_pose_latents = torch.zeros_like(pose_latents)
 
             # For classifier free guidance, we need to do two forward passes.
@@ -371,6 +377,10 @@ class MimicMotionPipeline(DiffusionPipeline):
         self,
         image: Union[PIL.Image.Image, List[PIL.Image.Image], torch.FloatTensor],
         image_pose: Union[torch.FloatTensor],
+        pose_strength: float = 1.0,
+        pose_start_percent: float = 0.0,
+        pose_end_percent: float = 1.0,
+        image_embed_strength: float = 1.0,
         height: int = 576,
         width: int = 1024,
         num_frames: Optional[int] = None,
@@ -508,7 +518,7 @@ class MimicMotionPipeline(DiffusionPipeline):
         self._guidance_scale = max_guidance_scale
 
         # 3. Encode input image
-        image_embeddings = self._encode_image(image, device, num_videos_per_prompt, self.do_classifier_free_guidance)
+        image_embeddings = self._encode_image(image, device, num_videos_per_prompt, self.do_classifier_free_guidance, image_embed_strength=image_embed_strength)
 
         # NOTE: Stable Diffusion Video was conditioned on fps - 1, which
         # is why it is reduced here.
@@ -589,6 +599,13 @@ class MimicMotionPipeline(DiffusionPipeline):
         self.unet.to(device)
 
         self._num_timesteps = len(timesteps)
+
+        # Calculate the actual start and end steps based on percentages
+        start_step_index = round(self._num_timesteps * pose_start_percent)
+        end_step_index = round(self._num_timesteps * pose_end_percent)
+
+        print(f"start_step_index: {start_step_index}, end_step_index: {end_step_index}")
+
         pose_latents = einops.rearrange(pose_latents, '(b f) c h w -> b f c h w', f=num_frames)
         indices = [[0, *range(i + 1, min(i + tile_size, num_frames))] for i in
                    range(0, num_frames - tile_size + 1, tile_size - tile_overlap)]
@@ -610,13 +627,26 @@ class MimicMotionPipeline(DiffusionPipeline):
                 # image_pose = pixel_values_pose[:, frame_start:frame_start + self.num_frames, ...]
                 weight = (torch.arange(tile_size, device=device) + 0.5) * 2. / tile_size
                 weight = torch.minimum(weight, 2 - weight)
+
                 for idx in indices:
+                    # Check if the current timestep is within the start and end step range
+                    if start_step_index <= i <= end_step_index:
+                        # Apply pose_latents as currently done
+                        print(f"Applying pose on step {i}")
+                        pose_latents_to_use = pose_latents[:, idx].flatten(0, 1)
+                    else:
+                        print(f"Not applying pose on step {i}")
+                        # Apply an alternative if pose_latents should not be used outside this range
+                        # This could be zeros, or any other placeholder logic you define.
+                        pose_latents_to_use = torch.zeros_like(pose_latents[:, idx].flatten(0, 1))
+
                     _noise_pred = self.unet(
                         latent_model_input[:, idx],
                         t,
                         encoder_hidden_states=image_embeddings,
                         added_time_ids=added_time_ids,
-                        pose_latents=pose_latents[:, idx].flatten(0, 1),
+                        pose_latents=pose_latents_to_use,
+                        pose_strength=pose_strength,
                         image_only_indicator=image_only_indicator,
                         return_dict=False,
                     )[0]
