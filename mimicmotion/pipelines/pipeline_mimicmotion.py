@@ -377,6 +377,7 @@ class MimicMotionPipeline(DiffusionPipeline):
         tile_size: Optional[int] = 16,
         tile_overlap: Optional[int] = 4,
         num_inference_steps: int = 25,
+        sigmas: Optional[List[float]] = None,
         min_guidance_scale: float = 1.0,
         max_guidance_scale: float = 3.0,
         fps: int = 7,
@@ -555,8 +556,8 @@ class MimicMotionPipeline(DiffusionPipeline):
         )
         added_time_ids = added_time_ids.to(device)
 
-        # 4. Prepare timesteps
-        timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, device, None)
+        # 6. Prepare timesteps
+        timesteps, num_inference_steps = retrieve_timesteps(self.scheduler, num_inference_steps, device, None, sigmas)
 
         # 5. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels

@@ -19,6 +19,20 @@ from .mimicmotion.modules.pose_net import PoseNet
 
 from .lcm_scheduler import AnimateLCMSVDStochasticIterativeScheduler
 
+def loglinear_interp(t_steps, num_steps):
+    """
+    Performs log-linear interpolation of a given array of decreasing numbers.
+    """
+    xs = np.linspace(0, 1, len(t_steps))
+    ys = np.log(t_steps[::-1])
+    
+    new_xs = np.linspace(0, 1, num_steps)
+    new_ys = np.interp(new_xs, xs, ys)
+    
+    interped_ys = np.exp(new_ys)[::-1].copy()
+    return interped_ys
+
+
 class MimicMotionModel(torch.nn.Module):
     def __init__(self, base_model_path, lcm=False):
         """construnct base model components and load pretrained svd model except pose-net
@@ -146,6 +160,69 @@ class DownloadAndLoadMimicMotionModel:
         pbar.update(1)
         return (mimic_model,)
     
+class DiffusersScheduler:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+            "scheduler": (
+                    [   
+                        'EulerDiscreteScheduler',
+                        'AnimateLCM_SVD'
+                    ],
+                    ), 
+            "sigma_min": ("FLOAT", {"default": 0.002, "min": 0.0, "max": 700.0, "step": 0.001}),
+            "sigma_max": ("FLOAT", {"default": 700.0, "min": 0.0, "max": 700.0, "step": 0.001}),
+            "align_your_steps": ("BOOLEAN", {"default": False}),
+            },
+        }
+
+    RETURN_TYPES = ("DIFFUSERS_SCHEDULER",)
+    RETURN_NAMES = ("scheduler",)
+    FUNCTION = "loadmodel"
+    CATEGORY = "MimicMotionWrapper"
+
+    def loadmodel(self, scheduler, sigma_min, sigma_max, align_your_steps):
+
+        scheduler_config = {
+            "beta_end": 0.012,
+            "beta_schedule": "scaled_linear",
+            "beta_start": 0.00085,
+            "clip_sample": False,
+            "interpolation_type": "linear",
+            "num_train_timesteps": 1000,
+            "prediction_type": "v_prediction",
+            "set_alpha_to_one": False,
+            "sigma_max": sigma_max,
+            "sigma_min": sigma_min,
+            "skip_prk_steps": True,
+            "steps_offset": 1,
+            "timestep_spacing": "leading",
+            "timestep_type": "continuous",
+            "trained_betas": None,
+            "use_karras_sigmas": True
+            }
+        if scheduler == 'EulerDiscreteScheduler':
+            noise_scheduler = EulerDiscreteScheduler.from_config(scheduler_config)
+        elif scheduler == 'AnimateLCM_SVD':
+            noise_scheduler = AnimateLCMSVDStochasticIterativeScheduler(
+                num_train_timesteps=40,
+                sigma_min=sigma_min,
+                sigma_max=sigma_max,
+                sigma_data=1.0,
+                s_noise=1.0,
+                rho=7,
+                clip_denoised=False,
+            )
+        if align_your_steps:
+            sigmas = [700.00, 54.5, 15.886, 7.977, 4.248, 1.789, 0.981, 0.403, 0.173, 0.034, 0.002]
+        
+        scheduler_options = {
+            "noise_scheduler": noise_scheduler,
+            "sigmas": sigmas if align_your_steps else None,
+        }
+
+        return (scheduler_options,)
+        
 class MimicMotionSampler:
     @classmethod
     def INPUT_TYPES(s):
@@ -163,6 +240,9 @@ class MimicMotionSampler:
             "context_overlap": ("INT", {"default": 6, "min": 1, "max": 128, "step": 1}),
             "keep_model_loaded": ("BOOLEAN", {"default": True}),            
             },
+            "optional": {
+                "optional_scheduler": ("DIFFUSERS_SCHEDULER",),
+            }
         }
 
     RETURN_TYPES = ("LATENT",)
@@ -170,24 +250,37 @@ class MimicMotionSampler:
     FUNCTION = "process"
     CATEGORY = "MimicMotionWrapper"
 
-    def process(self, mimic_pipeline, ref_image, pose_images, cfg_min, cfg_max, steps, seed, noise_aug_strength, fps, keep_model_loaded, context_size, context_overlap):
+    def process(self, mimic_pipeline, ref_image, pose_images, cfg_min, cfg_max, steps, seed, noise_aug_strength, fps, keep_model_loaded, 
+                context_size, context_overlap, optional_scheduler=None):
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
         mm.unload_all_models()
         mm.soft_empty_cache()
         dtype = mimic_pipeline['dtype']
-        pipeline = mimic_pipeline['pipeline']
+        pipeline = mimic_pipeline['pipeline']           
 
+        original_scheduler = pipeline.scheduler
+
+        if optional_scheduler is not None:
+            print("Using optional scheduler: ", optional_scheduler)
+            pipeline.scheduler = optional_scheduler['noise_scheduler']
+            sigmas = optional_scheduler['sigmas']
+
+            if sigmas is not None and (steps + 1) != len(sigmas):
+                sigmas = loglinear_interp(sigmas, steps + 1)
+                sigmas = sigmas[-(steps + 1):]
+                sigmas[-1] = 0
+                print("Using timesteps: ", sigmas)
+        else:
+            pipeline.scheduler = original_scheduler
+            sigmas = None
+  
         B, H, W, C = pose_images.shape
-       
+
+        assert B >= context_size, "The number of poses must be greater than the context size"
+
         ref_image = ref_image.permute(0, 3, 1, 2)
         pose_images = pose_images.permute(0, 3, 1, 2)
-
-        # if ref_image.shape[1:3] != (224, 224):
-        #     #ref_img = comfy.utils.common_upscale(ref_image, 224, 224, "lanczos", "disabled")
-        #     ref_img = clip_preprocess(ref_image, 224)
-        # else:
-        #     ref_img = ref_image
 
         pose_images = pose_images * 2 - 1
 
@@ -213,9 +306,9 @@ class MimicMotionSampler:
             max_guidance_scale=cfg_max, 
             decode_chunk_size=4, 
             output_type="latent", 
-            device=device
+            device=device,
+            sigmas=sigmas
         ).frames
-        #frames = frames.squeeze(0)[1:].permute(0, 2, 3, 1).cpu().float()
 
         if not keep_model_loaded:
             pipeline.unet.to(offload_device)
@@ -316,7 +409,6 @@ class MimicMotionGetPoses:
             if ref_pose['bodies']['score'].shape[0] > 0 and ref_pose['bodies']['score'][0][i] > 0.3]
         ref_body = ref_pose['bodies']['candidate'][ref_keypoint_id]
  
-
         height, width, _ = ref_image.shape
         pose_images_np = pose_images.cpu().numpy() * 255
 
@@ -340,9 +432,12 @@ class MimicMotionGetPoses:
         output_pose = []
         # pose rescale 
         for detected_pose in detected_poses_np_list:
-            detected_pose['bodies']['candidate'] = detected_pose['bodies']['candidate'] * a + b
-            detected_pose['faces'] = detected_pose['faces'] * a + b
-            detected_pose['hands'] = detected_pose['hands'] * a + b
+            if include_body:
+                detected_pose['bodies']['candidate'] = detected_pose['bodies']['candidate'] * a + b
+            if include_hand:
+                detected_pose['faces'] = detected_pose['faces'] * a + b
+            if include_face:
+                detected_pose['hands'] = detected_pose['hands'] * a + b
             im = draw_pose(detected_pose, height, width, include_body=include_body, include_hand=include_hand, include_face=include_face)
             output_pose.append(np.array(im))
 
@@ -360,12 +455,14 @@ NODE_CLASS_MAPPINGS = {
     "DownloadAndLoadMimicMotionModel": DownloadAndLoadMimicMotionModel,
     "MimicMotionSampler": MimicMotionSampler,
     "MimicMotionGetPoses": MimicMotionGetPoses,
-    "MimicMotionDecode": MimicMotionDecode
+    "MimicMotionDecode": MimicMotionDecode,
+    "DiffusersScheduler": DiffusersScheduler,
 
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "DownloadAndLoadMimicMotionModel": "DownloadAndLoadMimicMotionModel",
-    "MimicMotionSampler": "MimicMotionSampler",
-    "MimicMotionGetPoses": "MimicMotionGetPoses",
-    "MimicMotionDecode": "MimicMotionDecode"
+    "DownloadAndLoadMimicMotionModel": "(Down)Load MimicMotionModel",
+    "MimicMotionSampler": "MimicMotion Sampler",
+    "MimicMotionGetPoses": "MimicMotion GetPoses",
+    "MimicMotionDecode": "MimicMotion Decode",
+    "DiffusersScheduler": "Diffusers Scheduler",
 }
