@@ -2,7 +2,7 @@
 name = "comfyui-mimicmotionwrapper"
 description = "Optimized wrapper nodes for MimicMotion: [a/https://github.com/tencent/MimicMotion](https://github.com/tencent/MimicMotion)"
 version = "1.0.0"
-license = "LICENSE"
+license = "Apache-2.0"
 dependencies = ["diffusers>=0.27.0", "transformers>=4.32.1"]
 
 [project.urls]
@@ -10,6 +10,6 @@ Repository = "https://github.com/kijai/ComfyUI-MimicMotionWrapper"
 #  Used by Comfy Registry https://comfyregistry.org
 
 [tool.comfy]
-PublisherId = ""
+PublisherId = "kijai"
 DisplayName = "ComfyUI-MimicMotionWrapper"
 Icon = ""
