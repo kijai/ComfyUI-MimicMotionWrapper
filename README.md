@@ -1,6 +1,15 @@
 # WORK IN PROGRESS
 # MimicMotion wrapper for ComfyUI
 
+## Installation
+Clone this repo into custom_nodes folder.
+
+Install dependencies: `pip install -r requirements.txt`
+
+or if you use the portable install, run this in ComfyUI_windows_portable -folder:
+
+`python_embeded\python.exe -m pip install -r ComfyUI\custom_nodes\ComfyUI-MimicMotionWrapper\requirements.txt`
+
 Models are auto downloaded to their respective folders.
 
 Along with the MimicMotion -model (3.05 GB), to `ComfyUI\models\mimicmotion`:
