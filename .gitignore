@@ -156,5 +156,5 @@ cython_debug/
 _.*
 
 # models and outputs
-models/
+models/dwpose
 outputs/
