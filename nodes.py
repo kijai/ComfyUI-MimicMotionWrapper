@@ -19,8 +19,13 @@ from .mimicmotion.modules.pose_net import PoseNet
 
 from .lcm_scheduler import AnimateLCMSVDStochasticIterativeScheduler
 
-from accelerate import init_empty_weights
-from accelerate.utils import set_module_tensor_to_device
+from contextlib import nullcontext
+try:
+    from accelerate import init_empty_weights
+    from accelerate.utils import set_module_tensor_to_device
+    is_accelerate_available = True
+except:
+    pass
 
 
 def loglinear_interp(t_steps, num_steps):
@@ -35,28 +40,6 @@ def loglinear_interp(t_steps, num_steps):
     
     interped_ys = np.exp(new_ys)[::-1].copy()
     return interped_ys
-
-
-class MimicMotionModel(torch.nn.Module):
-    def __init__(self, base_model_path, lcm=False):
-        """construnct base model components and load pretrained svd model except pose-net
-        Args:
-            base_model_path (str): pretrained svd model path
-        """
-        super().__init__()
-        unet_subfolder = "unet_lcm" if lcm else "unet"
-        self.unet = UNetSpatioTemporalConditionModel.from_config(
-            UNetSpatioTemporalConditionModel.load_config(base_model_path, subfolder=unet_subfolder, variant="fp16"))
-        self.vae = AutoencoderKLTemporalDecoder.from_pretrained(
-            base_model_path, subfolder="vae", variant="fp16")
-        self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(
-            base_model_path, subfolder="image_encoder", variant="fp16")
-        self.noise_scheduler = EulerDiscreteScheduler.from_pretrained(
-            base_model_path, subfolder="scheduler")
-        self.feature_extractor = CLIPImageProcessor.from_pretrained(
-            base_model_path, subfolder="feature_extractor")
-        # pose_net
-        self.pose_net = PoseNet(noise_latent_channels=self.unet.config.block_out_channels[0])
 
 class DownloadAndLoadMimicMotionModel:
     @classmethod
@@ -116,13 +99,16 @@ class DownloadAndLoadMimicMotionModel:
                                 local_dir_use_symlinks=False)
         pbar.update(1)
 
-        unet_config = UNetSpatioTemporalConditionModel.load_config(svd_path, subfolder="unet", variant="fp16")
+        unet_config = UNetSpatioTemporalConditionModel.load_config(os.path.join(script_directory, "configs", "unet_config.json"))
         print("Loading UNET")
-        with (init_empty_weights()):
+        with (init_empty_weights() if is_accelerate_available else nullcontext()):
             self.unet = UNetSpatioTemporalConditionModel.from_config(unet_config)
         sd = comfy.utils.load_torch_file(os.path.join(model_path))
-        for key in sd:
-            set_module_tensor_to_device(self.unet, key, dtype=dtype, device=device, value=sd[key])
+        if is_accelerate_available:
+            for key in sd:
+                set_module_tensor_to_device(self.unet, key, dtype=dtype, device=device, value=sd[key])
+        else:
+            self.unet.load_state_dict(sd, strict=False)
         del sd
         pbar.update(1)
 
