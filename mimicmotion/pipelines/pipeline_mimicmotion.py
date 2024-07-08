@@ -635,10 +635,10 @@ class MimicMotionPipeline(DiffusionPipeline):
                     # Check if the current timestep is within the start and end step range
                     if start_step_index <= i <= end_step_index:
                         # Apply pose_latents as currently done
-                        print(f"Applying pose on step {i}")
+                        #print(f"Applying pose on step {i}")
                         pose_latents_to_use = pose_latents[:, idx].flatten(0, 1)
                     else:
-                        print(f"Not applying pose on step {i}")
+                        #print(f"Not applying pose on step {i}")
                         # Apply an alternative if pose_latents should not be used outside this range
                         # This could be zeros, or any other placeholder logic you define.
                         pose_latents_to_use = torch.zeros_like(pose_latents[:, idx].flatten(0, 1))

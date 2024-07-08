@@ -19,6 +19,10 @@ from .mimicmotion.modules.pose_net import PoseNet
 
 from .lcm_scheduler import AnimateLCMSVDStochasticIterativeScheduler
 
+from accelerate import init_empty_weights
+from accelerate.utils import set_module_tensor_to_device
+
+
 def loglinear_interp(t_steps, num_steps):
     """
     Performs log-linear interpolation of a given array of decreasing numbers.
@@ -59,7 +63,8 @@ class DownloadAndLoadMimicMotionModel:
     def INPUT_TYPES(s):
         return {"required": {
             "model": (
-                    [   'MimicMotion-fp16.safetensors',
+                    [   'MimicMotionMergedUnet_1-0-fp16.safetensors',
+                        'MimicMotionMergedUnet_1-1-fp16.safetensors',
                     ],
                     ),
             "precision": (
@@ -70,8 +75,6 @@ class DownloadAndLoadMimicMotionModel:
                     ], {
                         "default": 'fp16'
                     }),
-            "lcm": ("BOOLEAN", {"default": False}),
-            
             },
         }
 
@@ -80,12 +83,12 @@ class DownloadAndLoadMimicMotionModel:
     FUNCTION = "loadmodel"
     CATEGORY = "MimicMotionWrapper"
 
-    def loadmodel(self, precision, model, lcm):
+    def loadmodel(self, precision, model):
         device = mm.get_torch_device()
         mm.soft_empty_cache()
         dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}[precision]
 
-        pbar = comfy.utils.ProgressBar(3)
+        pbar = comfy.utils.ProgressBar(5)
         
         download_path = os.path.join(folder_paths.models_dir, "mimicmotion")
         model_path = os.path.join(download_path, model)
@@ -102,56 +105,52 @@ class DownloadAndLoadMimicMotionModel:
         pbar.update(1)
 
         svd_path = os.path.join(folder_paths.models_dir, "diffusers", "stable-video-diffusion-img2vid-xt-1-1")
-        svd_lcm_path = os.path.join(folder_paths.models_dir, "diffusers", "stable-video-diffusion-img2vid-xt-1-1-lcm", "unet_lcm")
         
-        if lcm and not os.path.exists(svd_lcm_path):
-            print(f"Downloading AnimateLCM SVD model to: {model_path}")
+        if not os.path.exists(svd_path):
+            print(f"Downloading SVD model to: {model_path}")
             from huggingface_hub import snapshot_download
-            snapshot_download(repo_id="Kijai/AnimateLCM-SVD-Comfy", 
-                                allow_patterns=[f"*.json", "*diffusion_pytorch_model.fp16.safetensors*"],
+            snapshot_download(repo_id="vdo/stable-video-diffusion-img2vid-xt-1-1", 
+                                allow_patterns=[f"*.json", "*fp16*"],
+                                ignore_patterns=["*unet*"],
                                 local_dir=svd_path, 
                                 local_dir_use_symlinks=False)
-        else:
-            if not os.path.exists(svd_path):
-                print(f"Downloading SVD model to: {model_path}")
-                from huggingface_hub import snapshot_download
-                snapshot_download(repo_id="vdo/stable-video-diffusion-img2vid-xt-1-1", 
-                                    allow_patterns=[f"*.json", "*fp16*"],
-                                    local_dir=svd_path, 
-                                    local_dir_use_symlinks=False)
         pbar.update(1)
 
-        mimicmotion_models = MimicMotionModel(svd_path, lcm=lcm).to(device=device).eval()
-        mimic_motion_sd = comfy.utils.load_torch_file(model_path)
-        mimicmotion_models.load_state_dict(mimic_motion_sd, strict=False)
+        unet_config = UNetSpatioTemporalConditionModel.load_config(svd_path, subfolder="unet", variant="fp16")
+        print("Loading UNET")
+        with (init_empty_weights()):
+            self.unet = UNetSpatioTemporalConditionModel.from_config(unet_config)
+        sd = comfy.utils.load_torch_file(os.path.join(model_path))
+        for key in sd:
+            set_module_tensor_to_device(self.unet, key, dtype=dtype, device=device, value=sd[key])
+        del sd
+        pbar.update(1)
 
-        if lcm:
-            lcm_noise_scheduler = AnimateLCMSVDStochasticIterativeScheduler(
-                num_train_timesteps=40,
-                sigma_min=0.002,
-                sigma_max=700.0,
-                sigma_data=1.0,
-                s_noise=1.0,
-                rho=7,
-                clip_denoised=False,
-            )
-            scheduler = lcm_noise_scheduler
-        else:
-            scheduler = mimicmotion_models.noise_scheduler
+        print("Loading VAE")
+        self.vae = AutoencoderKLTemporalDecoder.from_pretrained(svd_path, subfolder="vae", variant="fp16", low_cpu_mem_usage=True).to(dtype).to(device).eval()
 
-        pipeline = MimicMotionPipeline(
-            vae = mimicmotion_models.vae, 
-            image_encoder = mimicmotion_models.image_encoder, 
-            unet = mimicmotion_models.unet, 
-            scheduler = scheduler,
-            feature_extractor = mimicmotion_models.feature_extractor, 
-            pose_net = mimicmotion_models.pose_net,
-        )
+        print("Loading IMAGE_ENCODER")
+        self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(svd_path, subfolder="image_encoder", variant="fp16", low_cpu_mem_usage=True).to(dtype).to(device).eval()
+        pbar.update(1)
+        self.noise_scheduler = EulerDiscreteScheduler.from_pretrained(svd_path, subfolder="scheduler")
+        self.feature_extractor = CLIPImageProcessor.from_pretrained(svd_path, subfolder="feature_extractor")
         
-        pipeline.unet.to(dtype)
-        pipeline.pose_net.to(dtype)
-        pipeline.vae.to(dtype)
-        pipeline.image_encoder.to(dtype)
+        print("Loading POSE_NET")
+        self.pose_net = PoseNet(noise_latent_channels=self.unet.config.block_out_channels[0]).to(dtype).to(device).eval()
+        pose_net_sd = comfy.utils.load_torch_file(os.path.join(script_directory, 'models', 'mimic_motion_pose_net.safetensors'))
+        
+        self.unet.load_state_dict(pose_net_sd, strict=False)
+        self.pose_net.load_state_dict(pose_net_sd, strict=False)
+        del pose_net_sd
+       
+        pipeline = MimicMotionPipeline(
+            vae = self.vae, 
+            image_encoder = self.image_encoder, 
+            unet = self.unet, 
+            scheduler = self.noise_scheduler,
+            feature_extractor = self.feature_extractor, 
+            pose_net = self.pose_net,
+        )
         
         mimic_model = {
             'pipeline': pipeline,
@@ -266,7 +265,7 @@ class MimicMotionSampler:
         original_scheduler = pipeline.scheduler
 
         if optional_scheduler is not None:
-            print("Using optional scheduler: ", optional_scheduler)
+            print("Using optional scheduler: ", optional_scheduler['noise_scheduler'])
             pipeline.scheduler = optional_scheduler['noise_scheduler']
             sigmas = optional_scheduler['sigmas']
 
@@ -375,13 +374,17 @@ class MimicMotionGetPoses:
 
     def process(self, ref_image, pose_images, include_body, include_hand, include_face):
         device = mm.get_torch_device()
+        offload_device = mm.unet_offload_device()
         from .mimicmotion.dwpose.util import draw_pose
         from .mimicmotion.dwpose.dwpose_detector import DWposeDetector
 
         assert ref_image.shape[1:3] == pose_images.shape[1:3], "ref_image and pose_images must have the same resolution"
 
-        yolo_model = "yolox_l.onnx"
-        dw_pose_model = "dw-ll_ucoco_384.onnx"
+        #yolo_model = "yolox_l.onnx"
+        #dw_pose_model = "dw-ll_ucoco_384.onnx"
+        dw_pose_model = "dw-ll_ucoco_384_bs5.torchscript.pt"
+        yolo_model = "yolox_l.torchscript.pt"
+
         model_base_path = os.path.join(script_directory, "models", "DWPose")
 
         model_det=os.path.join(model_base_path, yolo_model)
@@ -390,7 +393,7 @@ class MimicMotionGetPoses:
         if not os.path.exists(model_det):
             print(f"Downloading yolo model to: {model_base_path}")
             from huggingface_hub import snapshot_download
-            snapshot_download(repo_id="yzd-v/DWPose", 
+            snapshot_download(repo_id="hr16/yolox-onnx", 
                                 allow_patterns=[f"*{yolo_model}*"],
                                 local_dir=model_base_path, 
                                 local_dir_use_symlinks=False)
@@ -398,23 +401,34 @@ class MimicMotionGetPoses:
         if not os.path.exists(model_pose):
             print(f"Downloading dwpose model to: {model_base_path}")
             from huggingface_hub import snapshot_download
-            snapshot_download(repo_id="yzd-v/DWPose", 
+            snapshot_download(repo_id="hr16/DWPose-TorchScript-BatchSize5", 
                                 allow_patterns=[f"*{dw_pose_model}*"],
                                 local_dir=model_base_path, 
                                 local_dir_use_symlinks=False)
+            
+        model_det=os.path.join(model_base_path, yolo_model)
+        model_pose=os.path.join(model_base_path, dw_pose_model) 
 
-        dwprocessor = DWposeDetector(
-            model_det=os.path.join(model_base_path, "yolox_l.onnx"),
-            model_pose=os.path.join(model_base_path, "dw-ll_ucoco_384.onnx"),
-            device=device)
+        if not hasattr(self, "det") or not hasattr(self, "pose"):
+            self.det = torch.jit.load(model_det)
+            self.pose = torch.jit.load(model_pose)
+
+            self.dwprocessor = DWposeDetector(
+                model_det=self.det,
+                model_pose=self.pose)
         
         ref_image = ref_image.squeeze(0).cpu().numpy() * 255
 
+        self.det = self.det.to(device)
+        self.pose = self.pose.to(device)
+
         # select ref-keypoint from reference pose for pose rescale
-        ref_pose = dwprocessor(ref_image)
-        ref_keypoint_id = [0, 1, 2, 5, 8, 11, 14, 15, 16, 17]
+        ref_pose = self.dwprocessor(ref_image)
+        #ref_keypoint_id = [0, 1, 2, 5, 8, 11, 14, 15, 16, 17]
+        ref_keypoint_id = [0, 1, 2, 5, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
         ref_keypoint_id = [i for i in ref_keypoint_id \
-            if ref_pose['bodies']['score'].shape[0] > 0 and ref_pose['bodies']['score'][0][i] > 0.3]
+            #if ref_pose['bodies']['score'].shape[0] > 0 and ref_pose['bodies']['score'][0][i] > 0.3]
+            if len(ref_pose['bodies']['subset']) > 0 and ref_pose['bodies']['subset'][0][i] >= .0]
         ref_body = ref_pose['bodies']['candidate'][ref_keypoint_id]
  
         height, width, _ = ref_image.shape
@@ -424,8 +438,11 @@ class MimicMotionGetPoses:
         pbar = comfy.utils.ProgressBar(len(pose_images_np))
         detected_poses_np_list = []
         for img_np in pose_images_np:
-            detected_poses_np_list.append(dwprocessor(img_np))
+            detected_poses_np_list.append(self.dwprocessor(img_np))
             pbar.update(1)
+
+        self.det = self.det.to(offload_device)
+        self.pose = self.pose.to(offload_device)
 
         detected_bodies = np.stack(
             [p['bodies']['candidate'] for p in detected_poses_np_list if p['bodies']['candidate'].shape[0] == 18])[:,

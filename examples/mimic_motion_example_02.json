@@ -14,7 +14,7 @@
         "1": 86
       },
       "flags": {},
-      "order": 7,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -57,40 +57,6 @@
       }
     },
     {
-      "id": 2,
-      "type": "DownloadAndLoadMimicMotionModel",
-      "pos": [
-        764,
-        229
-      ],
-      "size": {
-        "0": 315,
-        "1": 106
-      },
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "outputs": [
-        {
-          "name": "mimic_pipeline",
-          "type": "MIMICPIPE",
-          "links": [
-            146,
-            150
-          ],
-          "shape": 3
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "DownloadAndLoadMimicMotionModel"
-      },
-      "widgets_values": [
-        "MimicMotion-fp16.safetensors",
-        "fp16",
-        false
-      ]
-    },
-    {
       "id": 42,
       "type": "MimicMotionGetPoses",
       "pos": [
@@ -102,7 +68,7 @@
         "1": 126
       },
       "flags": {},
-      "order": 6,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -158,7 +124,7 @@
         "1": 410.70074462890625
       },
       "flags": {},
-      "order": 1,
+      "order": 0,
       "mode": 0,
       "outputs": [
         {
@@ -197,7 +163,7 @@
         "1": 242
       },
       "flags": {},
-      "order": 5,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -276,7 +242,7 @@
         "1": 242
       },
       "flags": {},
-      "order": 4,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -359,10 +325,10 @@
       ],
       "size": [
         2861.660400390625,
-        1566.960177951389
+        1586.960177951389
       ],
       "flags": {},
-      "order": 12,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -378,6 +344,11 @@
         {
           "name": "meta_batch",
           "type": "VHS_BatchManager",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
           "link": null
         }
       ],
@@ -406,10 +377,11 @@
           "hidden": false,
           "paused": false,
           "params": {
-            "filename": "MimicMotion_00001.mp4",
+            "filename": "MimicMotion_00002.mp4",
             "subfolder": "",
             "type": "temp",
-            "format": "video/h264-mp4"
+            "format": "video/h264-mp4",
+            "frame_rate": 12
           }
         }
       }
@@ -426,7 +398,7 @@
         "1": 190
       },
       "flags": {},
-      "order": 11,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -476,12 +448,12 @@
         1466,
         396
       ],
-      "size": [
-        255.46680297851572,
-        78
-      ],
+      "size": {
+        "0": 255.466796875,
+        "1": 78
+      },
       "flags": {},
-      "order": 10,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -515,64 +487,6 @@
       ]
     },
     {
-      "id": 57,
-      "type": "MimicMotionSampler",
-      "pos": [
-        1101,
-        419
-      ],
-      "size": {
-        "0": 315,
-        "1": 314
-      },
-      "flags": {},
-      "order": 9,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "mimic_pipeline",
-          "type": "MIMICPIPE",
-          "link": 146
-        },
-        {
-          "name": "ref_image",
-          "type": "IMAGE",
-          "link": 147
-        },
-        {
-          "name": "pose_images",
-          "type": "IMAGE",
-          "link": 148
-        }
-      ],
-      "outputs": [
-        {
-          "name": "samples",
-          "type": "LATENT",
-          "links": [
-            149
-          ],
-          "shape": 3,
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "MimicMotionSampler"
-      },
-      "widgets_values": [
-        25,
-        2,
-        2,
-        42,
-        "fixed",
-        15,
-        0,
-        16,
-        6,
-        false
-      ]
-    },
-    {
       "id": 37,
       "type": "VHS_VideoCombine",
       "pos": [
@@ -581,10 +495,10 @@
       ],
       "size": [
         440,
-        978.6666666666666
+        998.6666666666666
       ],
       "flags": {},
-      "order": 8,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -600,6 +514,11 @@
         {
           "name": "meta_batch",
           "type": "VHS_BatchManager",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
           "link": null
         }
       ],
@@ -625,36 +544,14 @@
           "hidden": false,
           "paused": false,
           "params": {
-            "filename": "MimicPose_00001.webp",
+            "filename": "MimicPose_00006.webp",
             "subfolder": "",
             "type": "temp",
-            "format": "image/webp"
+            "format": "image/webp",
+            "frame_rate": 8
           }
         }
       }
-    },
-    {
-      "id": 51,
-      "type": "Note",
-      "pos": [
-        770,
-        85
-      ],
-      "size": [
-        310.11510095517497,
-        95.53232006987258
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "properties": {
-        "text": ""
-      },
-      "widgets_values": [
-        "Downloads MimicMotion model and fp16 version of SVD XT 1.1\n\nlcm version is experimental and most likely doesn't work well"
-      ],
-      "color": "#432",
-      "bgcolor": "#653"
     },
     {
       "id": 5,
@@ -668,12 +565,17 @@
         658.5777723524305
       ],
       "flags": {},
-      "order": 3,
+      "order": 1,
       "mode": 0,
       "inputs": [
         {
           "name": "meta_batch",
           "type": "VHS_BatchManager",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
           "link": null
         }
       ],
@@ -733,6 +635,106 @@
           }
         }
       }
+    },
+    {
+      "id": 2,
+      "type": "DownloadAndLoadMimicMotionModel",
+      "pos": [
+        658,
+        230
+      ],
+      "size": [
+        404.81472289843646,
+        89.03937164746077
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "mimic_pipeline",
+          "type": "MIMICPIPE",
+          "links": [
+            146,
+            150
+          ],
+          "shape": 3
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "DownloadAndLoadMimicMotionModel"
+      },
+      "widgets_values": [
+        "MimicMotionMergedUnet_1-0-fp16.safetensors",
+        "fp16"
+      ]
+    },
+    {
+      "id": 57,
+      "type": "MimicMotionSampler",
+      "pos": [
+        1101,
+        419
+      ],
+      "size": {
+        "0": 315,
+        "1": 430
+      },
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mimic_pipeline",
+          "type": "MIMICPIPE",
+          "link": 146
+        },
+        {
+          "name": "ref_image",
+          "type": "IMAGE",
+          "link": 147
+        },
+        {
+          "name": "pose_images",
+          "type": "IMAGE",
+          "link": 148
+        },
+        {
+          "name": "optional_scheduler",
+          "type": "DIFFUSERS_SCHEDULER",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "links": [
+            149
+          ],
+          "shape": 3,
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MimicMotionSampler"
+      },
+      "widgets_values": [
+        20,
+        2,
+        2,
+        42,
+        "fixed",
+        15,
+        0,
+        16,
+        6,
+        false,
+        1,
+        0,
+        1,
+        1
+      ]
     }
   ],
   "links": [
@@ -885,10 +887,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.5644739300537777,
+      "scale": 0.5131581182307069,
       "offset": {
-        "0": 763.3873291015625,
-        "1": 37.92726135253906
+        "0": 572.9068982237912,
+        "1": 109.246958798682
       }
     }
   },

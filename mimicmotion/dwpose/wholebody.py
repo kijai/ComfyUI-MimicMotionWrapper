@@ -1,23 +1,30 @@
 import numpy as np
-import onnxruntime as ort
 
-from .onnxdet import inference_detector
-from .onnxpose import inference_pose
+import comfy.model_management as mm
 
+#import onnxruntime as ort
+# from .onnxdet import inference_detector
+# from .onnxpose import inference_pose
+
+from .jit_det import inference_detector as inference_jit_yolox
+from .jit_pose import inference_pose as inference_jit_pose
 
 class Wholebody:
     """detect human pose by dwpose
     """
-    def __init__(self, model_det, model_pose, device="cpu"):
-        providers = ['CPUExecutionProvider'] if device == 'cpu' else ['CUDAExecutionProvider']
-        provider_options = None if device == 'cpu' else [{'device_id': 0}]
+    def __init__(self, model_det, model_pose):
+        #providers = ['CPUExecutionProvider'] if device == 'cpu' else ['CUDAExecutionProvider']
+        #provider_options = None if device == 'cpu' else [{'device_id': 0}]
 
-        self.session_det = ort.InferenceSession(
-            path_or_bytes=model_det, providers=providers,  provider_options=provider_options
-        )
-        self.session_pose = ort.InferenceSession(
-            path_or_bytes=model_pose, providers=providers, provider_options=provider_options
-        )
+        # self.session_det = ort.InferenceSession(
+        #     path_or_bytes=model_det, providers=providers,  provider_options=provider_options
+        # )
+        # self.session_pose = ort.InferenceSession(
+        #     path_or_bytes=model_pose, providers=providers, provider_options=provider_options
+        # )
+
+        self.det = model_det        
+        self.pose = model_pose
     
     def __call__(self, oriImg):
         """call to process dwpose-detect
@@ -26,8 +33,9 @@ class Wholebody:
             oriImg (np.ndarray): detected image
 
         """
-        det_result = inference_detector(self.session_det, oriImg)
-        keypoints, scores = inference_pose(self.session_pose, det_result, oriImg)
+
+        det_result = inference_jit_yolox(self.det, oriImg, detect_classes=[0])
+        keypoints, scores = inference_jit_pose(self.pose, det_result, oriImg)
 
         keypoints_info = np.concatenate(
             (keypoints, scores[..., None]), axis=-1)

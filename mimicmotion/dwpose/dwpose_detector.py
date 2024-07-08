@@ -20,7 +20,7 @@ class DWposeDetector:
         device: (str) 'cpu' or 'cuda:{device_id}'
     """
     def __init__(self, model_det, model_pose, device='cpu'):
-        self.pose_estimation = Wholebody(model_det=model_det, model_pose=model_pose, device=device)
+        self.pose_estimation = Wholebody(model_det=model_det, model_pose=model_pose)
 
     def __call__(self, oriImg):
         oriImg = oriImg.copy()
