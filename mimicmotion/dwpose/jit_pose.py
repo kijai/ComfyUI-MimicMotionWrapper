@@ -22,7 +22,7 @@ def preprocess(
     # get shape of image
     img_shape = img.shape[:2]
     out_img, out_center, out_scale = [], [], []
-    if len(out_bbox) == 0:
+    if out_bbox is None or len(out_bbox) == 0:
         out_bbox = [[0, 0, img_shape[1], img_shape[0]]]
     for i in range(len(out_bbox)):
         x0 = out_bbox[i][0]
