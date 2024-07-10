@@ -542,9 +542,9 @@ class MimicMotionPipeline(DiffusionPipeline):
         image_latents = image_latents.to(image_embeddings.dtype)
 
         ref_latent = first_n_frames[:, 0] if first_n_frames is not None else None
-        pose_latents = self._encode_pose_image(
-            image_pose, do_classifier_free_guidance=self.do_classifier_free_guidance,
-        )
+        # pose_latents = self._encode_pose_image(
+        #     image_pose, do_classifier_free_guidance=self.do_classifier_free_guidance,
+        # )
 
         # cast back to fp16 if needed
         # if needs_upcasting:
@@ -609,7 +609,8 @@ class MimicMotionPipeline(DiffusionPipeline):
 
         print(f"start_step_index: {start_step_index}, end_step_index: {end_step_index}")
 
-        pose_latents = einops.rearrange(pose_latents, '(b f) c h w -> b f c h w', f=num_frames)
+        #pose_latents = einops.rearrange(pose_latents, '(b f) c h w -> b f c h w', f=num_frames)
+        pose_latents_shape = self.pose_net(image_pose[0].to(device))
         indices = [[0, *range(i + 1, min(i + tile_size, num_frames))] for i in
                    range(0, num_frames - tile_size + 1, tile_size - tile_overlap)]
         if indices[-1][-1] < num_frames - 1:
@@ -636,24 +637,51 @@ class MimicMotionPipeline(DiffusionPipeline):
                     if start_step_index <= i <= end_step_index:
                         # Apply pose_latents as currently done
                         #print(f"Applying pose on step {i}")
-                        pose_latents_to_use = pose_latents[:, idx].flatten(0, 1)
+                        pose_latents_to_use = self.pose_net(image_pose[idx].to(device))
+                        #pose_latents_to_use = pose_latents[:, idx].flatten(0, 1).to(device)
                     else:
                         #print(f"Not applying pose on step {i}")
                         # Apply an alternative if pose_latents should not be used outside this range
-                        # This could be zeros, or any other placeholder logic you define.
-                        pose_latents_to_use = torch.zeros_like(pose_latents[:, idx].flatten(0, 1))
+                        pose_latents_to_use = torch.zeros_like(pose_latents_shape, device=device)
 
+                    # _noise_pred = self.unet(
+                    #     latent_model_input[:, idx],
+                    #     t,
+                    #     encoder_hidden_states=image_embeddings,
+                    #     added_time_ids=added_time_ids,
+                    #     pose_latents=pose_latents_to_use,
+                    #     pose_strength=pose_strength,
+                    #     image_only_indicator=image_only_indicator,
+                    #     return_dict=False,
+                    # )[0]
+                    # noise_pred[:, idx] += _noise_pred * weight[:, None, None, None]
+
+                    # classification-free inference
+                    
                     _noise_pred = self.unet(
-                        latent_model_input[:, idx],
+                        latent_model_input[:1, idx],
                         t,
-                        encoder_hidden_states=image_embeddings,
-                        added_time_ids=added_time_ids,
-                        pose_latents=pose_latents_to_use,
-                        pose_strength=pose_strength,
+                        encoder_hidden_states=image_embeddings[:1],
+                        added_time_ids=added_time_ids[:1],
+                        pose_latents=None,
                         image_only_indicator=image_only_indicator,
                         return_dict=False,
                     )[0]
-                    noise_pred[:, idx] += _noise_pred * weight[:, None, None, None]
+                    noise_pred[:1, idx] += _noise_pred * weight[:, None, None, None]
+
+                    # normal inference
+                    _noise_pred = self.unet(
+                        latent_model_input[1:, idx],
+                        t,
+                        encoder_hidden_states=image_embeddings[1:],
+                        added_time_ids=added_time_ids[1:],
+                        pose_latents=pose_latents_to_use,
+                        image_only_indicator=image_only_indicator,
+                        return_dict=False,
+                    )[0]
+                    noise_pred[1:, idx] += _noise_pred * weight[:, None, None, None]
+
+
                     noise_pred_cnt[idx] += weight
                     progress_bar.update()
                     comfy_pbar.update(1)
