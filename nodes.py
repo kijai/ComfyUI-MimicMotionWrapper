@@ -39,6 +39,9 @@ except:
     is_accelerate_available = False
     pass
 
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+log = logging.getLogger(__name__)
 
 def loglinear_interp(t_steps, num_steps):
     """
@@ -89,20 +92,20 @@ class DownloadAndLoadMimicMotionModel:
         model_path = os.path.join(download_path, model)
         
         if not os.path.exists(model_path):
-            print(f"Downloading model to: {model_path}")
+            log.info(f"Downloading model to: {model_path}")
             from huggingface_hub import snapshot_download
             snapshot_download(repo_id="Kijai/MimicMotion_pruned", 
                                 allow_patterns=[f"*{model}*"],
                                 local_dir=download_path, 
                                 local_dir_use_symlinks=False)
 
-        print(f"Loading model from: {model_path}")
+        log.info(f"Loading model from: {model_path}")
         pbar.update(1)
 
         svd_path = os.path.join(folder_paths.models_dir, "diffusers", "stable-video-diffusion-img2vid-xt-1-1")
         
         if not os.path.exists(svd_path):
-            print(f"Downloading SVD model to: {model_path}")
+            log.info(f"Downloading SVD model to: {model_path}")
             from huggingface_hub import snapshot_download
             snapshot_download(repo_id="vdo/stable-video-diffusion-img2vid-xt-1-1", 
                                 allow_patterns=[f"*.json", "*fp16*"],
@@ -112,7 +115,7 @@ class DownloadAndLoadMimicMotionModel:
         pbar.update(1)
 
         unet_config = UNetSpatioTemporalConditionModel.load_config(os.path.join(script_directory, "configs", "unet_config.json"))
-        print("Loading UNET")
+        log.info("Loading UNET")
         with (init_empty_weights() if is_accelerate_available else nullcontext()):
             self.unet = UNetSpatioTemporalConditionModel.from_config(unet_config)
         sd = comfy.utils.load_torch_file(os.path.join(model_path))
@@ -124,16 +127,16 @@ class DownloadAndLoadMimicMotionModel:
         del sd
         pbar.update(1)
 
-        print("Loading VAE")
+        log.info("Loading VAE")
         self.vae = AutoencoderKLTemporalDecoder.from_pretrained(svd_path, subfolder="vae", variant="fp16", low_cpu_mem_usage=True).to(dtype).to(device).eval()
 
-        print("Loading IMAGE_ENCODER")
+        log.info("Loading IMAGE_ENCODER")
         self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(svd_path, subfolder="image_encoder", variant="fp16", low_cpu_mem_usage=True).to(dtype).to(device).eval()
         pbar.update(1)
         self.noise_scheduler = EulerDiscreteScheduler.from_pretrained(svd_path, subfolder="scheduler")
         self.feature_extractor = CLIPImageProcessor.from_pretrained(svd_path, subfolder="feature_extractor")
         
-        print("Loading POSE_NET")
+        log.info("Loading POSE_NET")
         self.pose_net = PoseNet(noise_latent_channels=self.unet.config.block_out_channels[0]).to(dtype).to(device).eval()
         pose_net_sd = comfy.utils.load_torch_file(os.path.join(script_directory, 'models', 'mimic_motion_pose_net.safetensors'))
         
@@ -152,7 +155,8 @@ class DownloadAndLoadMimicMotionModel:
         
         mimic_model = {
             'pipeline': pipeline,
-            'dtype': dtype
+            'dtype': dtype,
+            'model_name': model,
         }
         pbar.update(1)
         return (mimic_model,)
@@ -258,12 +262,14 @@ class MimicMotionSampler:
         mm.unload_all_models()
         mm.soft_empty_cache()
         dtype = mimic_pipeline['dtype']
-        pipeline = mimic_pipeline['pipeline']           
+        pipeline = mimic_pipeline['pipeline']
+        if "1-1" in mimic_pipeline['model_name'] and context_size is not 72:
+            log.warning("WARNING: 1.1 model should use 72 frame context_lenght")
 
         original_scheduler = pipeline.scheduler
 
         if optional_scheduler is not None:
-            print("Using optional scheduler: ", optional_scheduler['noise_scheduler'])
+            log.info("Using optional scheduler: ", optional_scheduler['noise_scheduler'])
             pipeline.scheduler = optional_scheduler['noise_scheduler']
             sigmas = optional_scheduler['sigmas']
 
@@ -271,7 +277,7 @@ class MimicMotionSampler:
                 sigmas = loglinear_interp(sigmas, steps + 1)
                 sigmas = sigmas[-(steps + 1):]
                 sigmas[-1] = 0
-                print("Using timesteps: ", sigmas)
+                log.info("Using timesteps: ", sigmas)
         else:
             pipeline.scheduler = original_scheduler
             sigmas = None
@@ -389,7 +395,7 @@ class MimicMotionGetPoses:
         model_pose=os.path.join(model_base_path, dw_pose_model)
 
         if not os.path.exists(model_det):
-            print(f"Downloading yolo model to: {model_base_path}")
+            log.info(f"Downloading yolo model to: {model_base_path}")
             from huggingface_hub import snapshot_download
             snapshot_download(repo_id="hr16/yolox-onnx", 
                                 allow_patterns=[f"*{yolo_model}*"],
@@ -397,7 +403,7 @@ class MimicMotionGetPoses:
                                 local_dir_use_symlinks=False)
             
         if not os.path.exists(model_pose):
-            print(f"Downloading dwpose model to: {model_base_path}")
+            log.info(f"Downloading dwpose model to: {model_base_path}")
             from huggingface_hub import snapshot_download
             snapshot_download(repo_id="hr16/DWPose-TorchScript-BatchSize5", 
                                 allow_patterns=[f"*{dw_pose_model}*"],
