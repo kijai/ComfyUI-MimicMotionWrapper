@@ -269,7 +269,7 @@ class MimicMotionSampler:
         original_scheduler = pipeline.scheduler
 
         if optional_scheduler is not None:
-            log.info("Using optional scheduler: ", optional_scheduler['noise_scheduler'])
+            log.info(f"Using optional scheduler: {optional_scheduler['noise_scheduler']}")
             pipeline.scheduler = optional_scheduler['noise_scheduler']
             sigmas = optional_scheduler['sigmas']
 
@@ -277,7 +277,7 @@ class MimicMotionSampler:
                 sigmas = loglinear_interp(sigmas, steps + 1)
                 sigmas = sigmas[-(steps + 1):]
                 sigmas[-1] = 0
-                log.info("Using timesteps: ", sigmas)
+                log.info(f"Using timesteps: {sigmas}")
         else:
             pipeline.scheduler = original_scheduler
             sigmas = None
