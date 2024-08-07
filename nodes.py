@@ -463,9 +463,9 @@ class MimicMotionGetPoses:
         for detected_pose in detected_poses_np_list:
             if include_body:
                 detected_pose['bodies']['candidate'] = detected_pose['bodies']['candidate'] * a + b
-            if include_hand:
-                detected_pose['faces'] = detected_pose['faces'] * a + b
             if include_face:
+                detected_pose['faces'] = detected_pose['faces'] * a + b
+            if include_hand:
                 detected_pose['hands'] = detected_pose['hands'] * a + b
             im = draw_pose(detected_pose, height, width, include_body=include_body, include_hand=include_hand, include_face=include_face)
             output_pose.append(np.array(im))
