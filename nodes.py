@@ -263,7 +263,7 @@ class MimicMotionSampler:
         mm.soft_empty_cache()
         dtype = mimic_pipeline['dtype']
         pipeline = mimic_pipeline['pipeline']
-        if "1-1" in mimic_pipeline['model_name'] and context_size is not 72:
+        if "1-1" in mimic_pipeline['model_name'] and context_size != 72:
             log.warning("WARNING: 1.1 model should use 72 frame context_lenght")
 
         original_scheduler = pipeline.scheduler

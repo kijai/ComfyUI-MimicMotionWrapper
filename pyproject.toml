@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-mimicmotionwrapper"
 description = "Optimized wrapper nodes for MimicMotion: [a/https://github.com/tencent/MimicMotion](https://github.com/tencent/MimicMotion)"
-version = "1.0.1"
+version = "1.0.2"
 license = { text = "Apache License 2.0" }
 dependencies = ["diffusers>=0.27.0", "transformers>=4.32.1"]
 
